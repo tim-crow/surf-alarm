@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Smart Surf Alarm - 5-day forecast checker.
-Runs daily at 4AM, checks 5-day forecast for each user's beach,
-and alerts only when NEW good days appear on the horizon.
+Smart Surf Alarm - Multi-user surf condition checker with per-beach wind logic.
+Fetches user preferences from Supabase and sends personalized alerts via Resend.
 """
 
 import os
-import json
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
+
+# Timezone for surf hours (AEST)
+TIMEZONE = ZoneInfo("Australia/Brisbane")
 
 # =============================================================================
 # CONFIGURATION
@@ -19,20 +20,20 @@ import requests
 
 WILLYWEATHER_API_KEY = os.environ.get("WILLYWEATHER_API_KEY", "YOUR_API_KEY_HERE")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "YOUR_RESEND_API_KEY")
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "alerts@swellcheck.co")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "alerts@swellcheck.com")
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://edbdbpnkphybctejcvxl.supabase.co")
+# Supabase configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lyotyndavhbvqpjfikzz.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 BASE_URL = "https://api.willyweather.com.au/v2"
-
-FORECAST_DAYS = 5
 
 # =============================================================================
 # BEACH DATA - Wind direction ranges (matches webapp/src/data/beaches.ts)
 # =============================================================================
 
 BEACHES = {
+    # Queensland (QLD)
     18159: {
         "name": "Noosa Main Beach",
         "offshoreRange": (135, 225),
@@ -63,6 +64,7 @@ BEACHES = {
         "crossShoreRange": [(90, 135), (225, 270)],
         "onshoreRange": (270, 90),
     },
+    # New South Wales (NSW)
     19017: {
         "name": "Byron Bay Beach",
         "offshoreRange": (135, 225),
@@ -99,6 +101,7 @@ BEACHES = {
         "crossShoreRange": [(200, 245), (335, 20)],
         "onshoreRange": (20, 200),
     },
+    # Victoria (VIC)
     13364: {
         "name": "Torquay Surf Beach",
         "offshoreRange": (315, 45),
@@ -129,6 +132,7 @@ BEACHES = {
         "crossShoreRange": [(290, 335), (65, 110)],
         "onshoreRange": (110, 290),
     },
+    # Western Australia (WA)
     19555: {
         "name": "Scarborough Beach",
         "offshoreRange": (45, 135),
@@ -147,6 +151,7 @@ BEACHES = {
         "crossShoreRange": [(20, 65), (155, 200)],
         "onshoreRange": (200, 20),
     },
+    # South Australia (SA)
     19399: {
         "name": "South Port",
         "offshoreRange": (25, 115),
@@ -161,6 +166,7 @@ BEACHES = {
     },
 }
 
+# Compass direction to degrees mapping
 COMPASS_TO_DEGREES = {
     "N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5,
     "E": 90, "ESE": 112.5, "SE": 135, "SSE": 157.5,
@@ -168,52 +174,30 @@ COMPASS_TO_DEGREES = {
     "W": 270, "WNW": 292.5, "NW": 315, "NNW": 337.5,
 }
 
-# Beach timezone mapping
-BEACH_TIMEZONES = {
-    "QLD": "Australia/Brisbane",
-    "NSW": "Australia/Sydney",
-    "VIC": "Australia/Melbourne",
-    "WA": "Australia/Perth",
-    "SA": "Australia/Adelaide",
-}
-
-BEACH_STATES = {
-    18159: "QLD", 18156: "QLD", 5956: "QLD", 5972: "QLD", 18118: "QLD",
-    19017: "NSW", 3736: "NSW", 17641: "NSW", 17814: "NSW", 4988: "NSW", 3168: "NSW",
-    13364: "VIC", 11642: "VIC", 19298: "VIC", 13591: "VIC", 13866: "VIC",
-    19555: "WA", 18919: "WA", 15258: "WA",
-    19399: "SA", 10135: "SA",
-}
-
-
-def get_beach_tz(beach_id: int) -> ZoneInfo:
-    state = BEACH_STATES.get(beach_id, "QLD")
-    return ZoneInfo(BEACH_TIMEZONES[state])
-
 
 # =============================================================================
 # SUPABASE
 # =============================================================================
-
-def _supabase_headers():
-    return {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-    }
-
 
 def get_active_users() -> list:
     """Fetch all active users from Supabase."""
     if not SUPABASE_KEY:
         print("ERROR: SUPABASE_KEY not set")
         return []
-
+    
     url = f"{SUPABASE_URL}/rest/v1/users"
-    params = {"is_active": "eq.true", "select": "*"}
-
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+    }
+    params = {
+        "is_active": "eq.true",
+        "select": "*",
+    }
+    
     try:
-        response = requests.get(url, headers=_supabase_headers(), params=params)
+        response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         users = response.json()
         print(f"  Fetched {len(users)} active user(s) from Supabase")
@@ -223,56 +207,51 @@ def get_active_users() -> list:
         return []
 
 
-def get_alerted_dates(user_id: str) -> list:
-    """Get the list of dates already alerted for this user."""
+def update_user_last_alert(user_id: str):
+    """Update user's last_alert_at timestamp."""
+    if not SUPABASE_KEY:
+        return
+    
     url = f"{SUPABASE_URL}/rest/v1/users"
-    params = {"id": f"eq.{user_id}", "select": "alerted_dates"}
-
-    try:
-        response = requests.get(url, headers=_supabase_headers(), params=params)
-        response.raise_for_status()
-        rows = response.json()
-        if rows and rows[0].get("alerted_dates"):
-            return rows[0]["alerted_dates"]
-    except Exception as e:
-        print(f"    Warning: Could not fetch alerted_dates: {e}")
-    return []
-
-
-def save_alerted_dates(user_id: str, dates: list):
-    """Save the updated list of alerted dates for a user."""
-    url = f"{SUPABASE_URL}/rest/v1/users"
-    headers = {**_supabase_headers(), "Prefer": "return=minimal"}
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
     params = {"id": f"eq.{user_id}"}
-
-    # Keep only dates in the future or recent past (last 7 days) to avoid unbounded growth
-    cutoff = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
-    clean_dates = [d for d in dates if d >= cutoff]
-
+    data = {"last_alert_at": datetime.now(TIMEZONE).isoformat()}
+    
     try:
-        requests.patch(url, headers=headers, params=params, json={
-            "alerted_dates": clean_dates,
-            "last_alert_at": datetime.utcnow().isoformat(),
-        })
+        requests.patch(url, headers=headers, params=params, json=data)
     except Exception as e:
-        print(f"    Warning: Could not save alerted_dates: {e}")
+        print(f"    Warning: Could not update last_alert_at: {e}")
 
 
 # =============================================================================
 # WILLYWEATHER API
 # =============================================================================
 
-def get_forecast(location_id: int, days: int = 5) -> dict:
-    """Get swell, tide graph, and wind forecast for a location."""
+def get_forecast(location_id: int, days: int = 1) -> dict:
+    """Get swell, tide, and wind forecast for a location."""
     url = f"{BASE_URL}/{WILLYWEATHER_API_KEY}/locations/{location_id}/weather.json"
-
+    
     params = {
         "forecasts": "swell,tides,wind",
-        "forecastGraphs": "tides",
         "days": days,
-        "startDate": datetime.utcnow().strftime("%Y-%m-%d"),
+        "startDate": datetime.now().strftime("%Y-%m-%d"),
     }
+    
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
 
+
+def get_wind_observations(location_id: int) -> dict:
+    """Get current wind observations."""
+    url = f"{BASE_URL}/{WILLYWEATHER_API_KEY}/locations/{location_id}/weather.json"
+    params = {"observational": "true"}
+    
     response = requests.get(url, params=params)
     response.raise_for_status()
     return response.json()
@@ -283,232 +262,206 @@ def get_forecast(location_id: int, days: int = 5) -> dict:
 # =============================================================================
 
 def compass_to_degrees(direction: str) -> float:
+    """Convert compass direction to degrees."""
     return COMPASS_TO_DEGREES.get(direction.upper(), -1)
 
 
 def is_in_range(degrees: float, range_tuple: tuple) -> bool:
+    """
+    Check if degrees is within range, handling wrap-around at 360/0.
+    Range is (start, end) where we go clockwise from start to end.
+    """
     start, end = range_tuple
+    
     if start <= end:
+        # Normal range (e.g., 135 to 225)
         return start <= degrees <= end
     else:
+        # Wrap-around range (e.g., 315 to 45 means 315-360 OR 0-45)
         return degrees >= start or degrees <= end
 
 
 def classify_wind_direction(degrees: float, beach_id: int) -> str:
+    """
+    Classify wind direction as 'offshore', 'cross_shore', or 'onshore' for a beach.
+    Returns the wind type string.
+    """
     beach = BEACHES.get(beach_id)
     if not beach:
         return "unknown"
-
+    
+    # Check offshore first (ideal)
     if is_in_range(degrees, beach["offshoreRange"]):
         return "offshore"
-
+    
+    # Check cross-shore ranges
     for cross_range in beach["crossShoreRange"]:
         if is_in_range(degrees, cross_range):
             return "cross_shore"
-
+    
+    # Otherwise it's onshore
     return "onshore"
 
 
 def is_good_wind_for_user(wind: dict, user: dict, beach_id: int) -> tuple:
+    """
+    Check if wind conditions are acceptable for a specific user.
+    Returns (is_good: bool, wind_type: str, reason: str)
+    """
     speed = wind.get("speed", 999)
     direction = wind.get("direction", "")
-
+    
+    # Convert compass to degrees
     degrees = compass_to_degrees(direction)
     if degrees < 0:
         return False, "unknown", f"Unknown wind direction: {direction}"
-
+    
+    # Classify the wind direction for this beach
     wind_type = classify_wind_direction(degrees, beach_id)
-
+    
+    # Get user's max wind speed for this wind type
     if wind_type == "offshore":
         max_speed = user.get("offshore_max_wind", 25)
-        type_label = "Offshore"
+        type_label = "Offshore (ideal)"
     elif wind_type == "cross_shore":
         max_speed = user.get("cross_shore_max_wind", 10)
-        type_label = "Cross-shore"
-    else:
+        type_label = "Cross-shore (marginal)"
+    else:  # onshore
         max_speed = user.get("onshore_max_wind", 5)
-        type_label = "Onshore"
-
-    # Allow 20% tolerance to account for forecast inaccuracy
-    tolerance_max = max_speed * 1.2
-
+        type_label = "Onshore (avoid)"
+    
     if speed <= max_speed:
-        return True, wind_type, f"{type_label}: {speed} km/h {direction}"
-    elif speed <= tolerance_max:
-        return True, wind_type, f"{type_label}: {speed} km/h {direction} (within 20% tolerance of {max_speed})"
+        return True, wind_type, f"{type_label}: {speed} km/h {direction} (max: {max_speed})"
     else:
         return False, wind_type, f"{type_label}: {speed} km/h {direction} exceeds max {max_speed}"
 
 
 # =============================================================================
-# FORECAST EVALUATION
+# CONDITION CHECKING
 # =============================================================================
 
-def build_tide_timeline(forecast: dict) -> list:
+def parse_forecast_windows(forecast: dict, user: dict) -> list:
     """
-    Build a tide height timeline from forecastGraphs (interpolated) data,
-    falling back to plain forecast tide events.
+    Parse forecast data to find windows matching user's swell/tide preferences.
+    Returns list of window dictionaries.
     """
-    tide_points = []
-
-    # Try forecastGraphs first (interpolated continuous data)
-    graph_data = forecast.get("forecastGraphs", {}).get("tides", {})
-    if graph_data:
-        for day in graph_data.get("dataConfig", {}).get("series", {}).get("groups", []):
-            for point in day.get("points", []):
-                tide_points.append({
-                    "dt_str": None,
-                    "x": point.get("x"),
-                    "height": point.get("y"),
-                })
-        if tide_points:
-            return tide_points
-
-    # Fallback: use forecast tide events (high/low only)
-    for day in forecast.get("forecasts", {}).get("tides", {}).get("days", []):
-        for entry in day.get("entries", []):
-            tide_points.append({
-                "dt_str": entry.get("dateTime"),
-                "height": entry.get("height", 0),
-                "type": entry.get("type"),
-            })
-
-    return tide_points
-
-
-def get_tide_at_time(tide_points: list, target_dt: datetime, tz: ZoneInfo) -> float:
-    """Interpolate tide height at a given time from tide data points."""
-    if not tide_points:
-        return None
-
-    # If we have graph data with x timestamps
-    if tide_points[0].get("x") is not None:
-        target_ts = target_dt.timestamp()
-        best = None
-        best_diff = float("inf")
-        for p in tide_points:
-            diff = abs(p["x"] - target_ts)
-            if diff < best_diff:
-                best_diff = diff
-                best = p["height"]
-        return best
-
-    # Fallback: find closest tide event by datetime string
-    best = None
-    best_diff = float("inf")
-    for p in tide_points:
-        try:
-            pdt = datetime.strptime(p["dt_str"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
-            diff = abs((pdt - target_dt).total_seconds())
-            if diff < best_diff:
-                best_diff = diff
-                best = p["height"]
-        except (ValueError, TypeError):
-            continue
-
-    return best
-
-
-def evaluate_forecast(forecast: dict, user: dict, beach_id: int) -> list:
-    """
-    Evaluate 5-day forecast and return list of good dates with details.
-    Each entry: { "date": "YYYY-MM-DD", "windows": [...] }
-    """
-    tz = get_beach_tz(beach_id)
+    windows = []
     forecasts = forecast.get("forecasts", {})
-
+    
+    # User preferences
     min_swell = user.get("min_swell", 1.0)
     max_swell = user.get("max_swell", 3.0)
     min_tide = user.get("min_tide", 0)
     max_tide = user.get("max_tide", 2.0)
     start_hour = user.get("start_hour", 5)
     end_hour = user.get("end_hour", 18)
-
-    # Parse swell entries across all days
-    swell_entries = []
+    
+    # Parse swell data
+    swell_data = {}
     for day in forecasts.get("swell", {}).get("days", []):
         for entry in day.get("entries", []):
-            swell_entries.append(entry)
-
-    # Parse wind entries across all days
-    wind_by_time = {}
+            dt_str = entry.get("dateTime")
+            swell_data[dt_str] = entry.get("height", 0)
+    
+    # Parse tide data
+    tide_data = {}
+    for day in forecasts.get("tides", {}).get("days", []):
+        for entry in day.get("entries", []):
+            dt_str = entry.get("dateTime")
+            tide_data[dt_str] = entry.get("height", 0)
+    
+    # Parse wind forecast data
+    wind_data = {}
     for day in forecasts.get("wind", {}).get("days", []):
         for entry in day.get("entries", []):
-            wind_by_time[entry["dateTime"]] = {
+            dt_str = entry.get("dateTime")
+            wind_data[dt_str] = {
                 "speed": entry.get("speed", 0),
                 "direction": entry.get("directionText", ""),
             }
-
-    # Build tide timeline
-    tide_points = build_tide_timeline(forecast)
-
-    # Evaluate each swell entry
-    good_days = {}  # date_str -> { windows: [...] }
-
-    for entry in swell_entries:
-        dt_str = entry.get("dateTime")
-        swell_height = entry.get("height", 0)
-
+    
+    now = datetime.now(TIMEZONE)
+    next_24h = now + timedelta(hours=24)
+    
+    for dt_str, swell_height in swell_data.items():
         try:
-            dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
-        except (ValueError, TypeError):
+            dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=TIMEZONE)
+        except ValueError:
             continue
-
+        
+        if dt < now or dt > next_24h:
+            continue
+        
         # Check user's preferred hours
         if dt.hour < start_hour or dt.hour >= end_hour:
             continue
-
+        
         # Check swell range
         if not (min_swell <= swell_height <= max_swell):
             continue
-
-        # Get tide height at this time
-        tide_height = get_tide_at_time(tide_points, dt, tz)
+        
+        # Find closest tide reading
+        tide_height = tide_data.get(dt_str)
         if tide_height is None:
-            continue
-
+            closest_tide = None
+            min_diff = float('inf')
+            for tide_dt_str, height in tide_data.items():
+                try:
+                    tide_dt = datetime.strptime(tide_dt_str, "%Y-%m-%d %H:%M:%S")
+                    tide_dt = tide_dt.replace(tzinfo=TIMEZONE)
+                    diff = abs((tide_dt - dt).total_seconds())
+                    if diff < min_diff:
+                        min_diff = diff
+                        closest_tide = height
+                except ValueError:
+                    continue
+            tide_height = closest_tide if closest_tide is not None else 999
+        
         # Check tide range
         if not (min_tide <= tide_height <= max_tide):
             continue
-
-        # Get wind at this time (exact or nearest)
-        wind = wind_by_time.get(dt_str)
-        if not wind:
-            nearest_wind = None
-            min_diff = float("inf")
-            for wdt_str, wdata in wind_by_time.items():
-                try:
-                    wdt = datetime.strptime(wdt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz)
-                    diff = abs((wdt - dt).total_seconds())
-                    if diff < min_diff:
-                        min_diff = diff
-                        nearest_wind = wdata
-                except (ValueError, TypeError):
-                    continue
-            wind = nearest_wind or {"speed": 999, "direction": "N/A"}
-
-        # Check wind
-        is_good, wind_type, wind_reason = is_good_wind_for_user(wind, user, beach_id)
-        if not is_good:
-            continue
-
-        # This time window is good!
-        date_str = dt.strftime("%Y-%m-%d")
-        if date_str not in good_days:
-            good_days[date_str] = []
-
-        good_days[date_str].append({
-            "time": dt.strftime("%H:%M"),
+        
+        wind_info = wind_data.get(dt_str, {"speed": 999, "direction": "N/A"})
+        windows.append({
+            "datetime": dt,
             "swell": swell_height,
-            "swell_period": entry.get("period", 0),
-            "swell_dir": entry.get("directionText", ""),
             "tide": tide_height,
-            "wind_speed": wind["speed"],
-            "wind_dir": wind["direction"],
-            "wind_type": wind_type,
+            "wind_forecast": wind_info,
         })
+    
+    return windows
 
-    return good_days
+
+def check_current_wind(location_id: int, forecast_wind: dict = None) -> dict:
+    """Get current wind, falling back to forecast if observations unavailable."""
+    try:
+        obs = get_wind_observations(location_id)
+        wind_obs = obs.get("observational", {}).get("observations", {}).get("wind", {})
+        
+        if wind_obs:
+            speed = wind_obs.get("speed")
+            direction = wind_obs.get("directionText")
+            if speed is not None and direction:
+                return {
+                    "speed": speed,
+                    "direction": direction,
+                    "gust": wind_obs.get("gustSpeed", 0),
+                    "source": "live"
+                }
+    except Exception as e:
+        print(f"    Warning: Could not get wind observations: {e}")
+    
+    # Fall back to forecast
+    if forecast_wind:
+        return {
+            "speed": forecast_wind.get("speed", 0),
+            "direction": forecast_wind.get("direction", "N/A"),
+            "gust": 0,
+            "source": "forecast"
+        }
+    
+    return {"speed": 999, "direction": "N/A", "gust": 0, "source": "none"}
 
 
 # =============================================================================
@@ -516,6 +469,7 @@ def evaluate_forecast(forecast: dict, user: dict, beach_id: int) -> list:
 # =============================================================================
 
 def send_email(to_email: str, subject: str, body: str) -> bool:
+    """Send email via Resend API."""
     try:
         response = requests.post(
             "https://api.resend.com/emails",
@@ -530,7 +484,7 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
                 "text": body,
             },
         )
-
+        
         if response.status_code in (200, 201):
             print(f"    ✓ Email sent: {subject}")
             return True
@@ -542,236 +496,216 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         return False
 
 
-def format_forecast_email(user: dict, beach_name: str, good_days: dict, new_dates: list) -> tuple:
-    """Format the 5-day forecast alert email."""
-    tz = get_beach_tz(user.get("beach_id", 0))
-    name = user.get("name", "Surfer")
+def format_alert_email(user: dict, beach_name: str, window: dict, wind: dict, wind_reason: str) -> tuple:
+    """Format the surf alert email."""
+    dt = window["datetime"]
+    
+    subject = f"🏄 Surf's On! {beach_name} - Good conditions at {dt.strftime('%H:%M')}"
+    
+    body = f"""OUT THERE! SURF CONDITIONS ARE MET!
+{'=' * 40}
 
-    # Build subject with the dates
-    date_labels = []
-    for date_str in sorted(new_dates):
-        dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=tz)
-        date_labels.append(dt.strftime("%a %d %b"))
+Location: {beach_name}
+Time: {dt.strftime('%A %d %B %Y at %H:%M')}
 
-    if len(date_labels) == 1:
-        subject = f"🏄 Surf window ahead! {beach_name} looks good on {date_labels[0]}"
-    else:
-        subject = f"🏄 Surf windows ahead! {beach_name} — {', '.join(date_labels)}"
+CONDITIONS:
+-----------
+Swell Height: {window['swell']:.1f}m ✓
+  (Your range: {user.get('min_swell', 1.0)}m – {user.get('max_swell', 3.0)}m)
 
-    body = f"Hey {name}!\n\n"
-    body += f"We've spotted good conditions coming up at {beach_name}.\n\n"
+Tide Height: {window['tide']:.2f}m ✓
+  (Your range: {user.get('min_tide', 0):.1f}m – {user.get('max_tide', 2.0):.1f}m)
 
-    for date_str in sorted(new_dates):
-        dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=tz)
-        body += f"{'=' * 44}\n"
-        body += f"📅 {dt.strftime('%A %d %B %Y')}\n"
-        body += f"{'=' * 44}\n\n"
+Wind: {wind['speed']} km/h from {wind['direction']}
+  {wind_reason} ✓
 
-        windows = good_days[date_str]
+Wind Source: {wind.get('source', 'forecast').title()}
 
-        # Show the best window (lowest wind, best swell)
-        best = min(windows, key=lambda w: w["wind_speed"])
+---
+Generated: {datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')} AEST
 
-        # Show time range
-        times = sorted(set(w["time"] for w in windows))
-        if len(times) == 1:
-            body += f"  ⏰ Best around {times[0]}\n"
-        else:
-            body += f"  ⏰ Good windows: {times[0]} – {times[-1]}\n"
-
-        body += f"  🌊 Swell: {best['swell']:.1f}m"
-        if best.get("swell_period"):
-            body += f" @ {best['swell_period']:.0f}s"
-        if best.get("swell_dir"):
-            body += f" ({best['swell_dir']})"
-        body += "\n"
-
-        body += f"  🌊 Tide: {best['tide']:.2f}m\n"
-
-        wind_label = {"offshore": "Offshore ✓", "cross_shore": "Cross-shore ~", "onshore": "Onshore"}
-        body += f"  💨 Wind: {best['wind_speed']} km/h {best['wind_dir']}"
-        body += f" — {wind_label.get(best['wind_type'], best['wind_type'])}\n"
-        body += "\n"
-
-    body += "—\n"
-    body += f"Your thresholds:\n"
-    body += f"  Swell: {user.get('min_swell', 1.0)}m – {user.get('max_swell', 3.0)}m\n"
-    body += f"  Tide: {user.get('min_tide', 0):.1f}m – {user.get('max_tide', 2.0):.1f}m\n"
-    body += f"  Offshore wind: up to {user.get('offshore_max_wind', 25)} km/h\n"
-    body += f"  Cross-shore wind: up to {user.get('cross_shore_max_wind', 10)} km/h\n"
-    body += f"  Onshore wind: up to {user.get('onshore_max_wind', 5)} km/h\n"
-    body += f"  Hours: {user.get('start_hour', 5)}:00 – {user.get('end_hour', 18)}:00\n"
-    body += "\n"
-    body += "Update your settings: https://www.swellcheck.co/account\n\n"
-    body += "This is an automated message. Please do not reply to this email.\n"
-
+To update your preferences or cancel, reply to this email.
+"""
+    
     return subject, body
 
 
 # =============================================================================
-# MAIN
+# MAIN LOOP
 # =============================================================================
 
-def check_user_forecast(user: dict) -> bool:
+def check_user(user: dict, alerted_users: set) -> bool:
     """
-    Check 5-day forecast for a user. Alert only on NEW good dates
-    that haven't been alerted before.
+    Check conditions for a single user.
+    Returns True if alert was sent.
     """
     user_id = user.get("id")
     email = user.get("email")
     name = user.get("name", "Surfer")
     beach_id = user.get("beach_id")
     beach_name = user.get("beach_name", "Unknown Beach")
-
+    
+    # Skip if no beach configured
     if not beach_id:
         return False
-
-    print(f"  Checking {name} ({email}) — {beach_name}...")
-
-    try:
-        forecast = get_forecast(beach_id, days=FORECAST_DAYS)
-
-        # Get location timezone from API response if available
-        location_tz_str = forecast.get("location", {}).get("timeZone")
-        if location_tz_str:
-            # Update for this run (more accurate than our mapping)
-            pass
-
-        good_days = evaluate_forecast(forecast, user, beach_id)
-
-        if not good_days:
-            print(f"    No good days in the next {FORECAST_DAYS} days")
-            return False
-
-        print(f"    Found good conditions on: {', '.join(sorted(good_days.keys()))}")
-
-        # Check which dates are new (not yet alerted)
-        previously_alerted = set(get_alerted_dates(user_id))
-        new_dates = [d for d in sorted(good_days.keys()) if d not in previously_alerted]
-
-        if not new_dates:
-            print(f"    Already alerted for these dates — skipping")
-            return False
-
-        print(f"    NEW dates to alert: {', '.join(new_dates)}")
-
-        # Send forecast email
-        subject, body = format_forecast_email(user, beach_name, good_days, new_dates)
-
-        if send_email(email, subject, body):
-            # Save all good dates (new + old) as alerted
-            all_alerted = list(previously_alerted | set(good_days.keys()))
-            save_alerted_dates(user_id, all_alerted)
-            return True
-
+    
+    # Skip if already alerted today
+    alert_key = f"{user_id}:{datetime.now(TIMEZONE).strftime('%Y%m%d')}"
+    if alert_key in alerted_users:
         return False
-
+    
+    # Check if within user's alert hours
+    now = datetime.now(TIMEZONE)
+    start_hour = user.get("start_hour", 5)
+    end_hour = user.get("end_hour", 18)
+    
+    if now.hour < start_hour or now.hour >= end_hour:
+        return False
+    
+    print(f"  Checking {name} ({email}) - {beach_name}...")
+    
+    try:
+        # Get forecast for this beach
+        forecast = get_forecast(beach_id, days=1)
+        
+        # Find windows matching user's swell/tide preferences
+        windows = parse_forecast_windows(forecast, user)
+        
+        if not windows:
+            print(f"    No matching swell/tide windows")
+            return False
+        
+        print(f"    Found {len(windows)} potential window(s)")
+        
+        # Check current wind for the best window
+        for window in windows:
+            time_to_window = (window["datetime"] - now).total_seconds() / 60
+            
+            # Only check windows within next 2 hours
+            if time_to_window > 120:
+                continue
+            
+            # Get current wind
+            wind = check_current_wind(beach_id, window.get("wind_forecast"))
+            source = wind.get("source", "unknown")
+            print(f"    Wind ({source}): {wind['speed']} km/h from {wind['direction']}")
+            
+            # Check if wind is acceptable for this user
+            is_good, wind_type, reason = is_good_wind_for_user(wind, user, beach_id)
+            
+            if is_good:
+                print(f"    ✓ Conditions met! Sending alert...")
+                
+                subject, body = format_alert_email(user, beach_name, window, wind, reason)
+                
+                if send_email(email, subject, body):
+                    alerted_users.add(alert_key)
+                    update_user_last_alert(user_id)
+                    return True
+            else:
+                print(f"    ✗ Wind not ideal: {reason}")
+        
+        return False
+        
     except Exception as e:
         print(f"    Error: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 
-def run_once():
-    """Run a single check for all users (called by cron/scheduler)."""
+def run_alarm():
+    """Main alarm loop - checks all users."""
     print("=" * 50)
-    print(f"SWELLCHECK — {FORECAST_DAYS}-DAY FORECAST CHECK")
-    print(f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print("SWELLCHECK - MULTI-USER SURF ALARM")
     print("=" * 50)
-
+    
+    # Validate configuration
     if not WILLYWEATHER_API_KEY or WILLYWEATHER_API_KEY == "YOUR_API_KEY_HERE":
         print("ERROR: WILLYWEATHER_API_KEY not set!")
         return
-
+    
     if not SUPABASE_KEY:
         print("ERROR: SUPABASE_KEY not set!")
         return
-
-    users = get_active_users()
-
-    if not users:
-        print("  No active users to check")
-        return
-
-    alerts_sent = 0
-    for user in users:
-        if check_user_forecast(user):
-            alerts_sent += 1
-        time.sleep(1)  # rate limit WillyWeather
-
-    print(f"\nDone. Sent {alerts_sent} forecast alert(s) to {len(users)} user(s).")
-
-
-def run_loop():
-    """Run in a loop, checking daily at 4AM AEST."""
-    print("SWELLCHECK — DAILY FORECAST LOOP")
-    print(f"Will check at 4:00 AM AEST daily\n")
-
-    aest = ZoneInfo("Australia/Brisbane")
-
+    
+    print(f"Supabase: {SUPABASE_URL}")
+    print(f"Check interval: 30 minutes")
+    print()
+    
+    alerted_users = set()  # Track who we've alerted today
+    last_date = None
+    
     while True:
-        now = datetime.now(aest)
-
-        # Calculate next 4AM
-        next_run = now.replace(hour=4, minute=0, second=0, microsecond=0)
-        if now >= next_run:
-            next_run += timedelta(days=1)
-
-        wait_secs = (next_run - now).total_seconds()
-        print(f"[{now.strftime('%H:%M:%S')}] Next check at {next_run.strftime('%Y-%m-%d %H:%M')} AEST ({wait_secs / 3600:.1f}h)")
-        time.sleep(wait_secs)
-
-        run_once()
+        now = datetime.now(TIMEZONE)
+        today = now.date()
+        
+        # Reset alerts at midnight
+        if last_date and last_date != today:
+            alerted_users.clear()
+            print(f"\n[{now.strftime('%H:%M:%S')}] New day - cleared alert history")
+        last_date = today
+        
+        print(f"\n[{now.strftime('%H:%M:%S')}] Checking conditions...")
+        
+        # Fetch active users
+        users = get_active_users()
+        
+        if not users:
+            print("  No active users to check")
+        else:
+            alerts_sent = 0
+            for user in users:
+                if check_user(user, alerted_users):
+                    alerts_sent += 1
+            
+            print(f"  Done. Sent {alerts_sent} alert(s).")
+        
+        # Wait 30 minutes
+        print(f"  Next check at {(now + timedelta(minutes=30)).strftime('%H:%M')}")
+        time.sleep(30 * 60)
 
 
 def test_user(email: str):
-    """Test mode — check a specific user's 5-day forecast."""
-    print(f"Testing 5-day forecast for: {email}\n")
-
+    """Test mode - check a specific user's conditions."""
+    print(f"Testing conditions for: {email}")
+    
     users = get_active_users()
     user = next((u for u in users if u.get("email") == email), None)
-
+    
     if not user:
         print(f"User not found: {email}")
         return
-
-    print(f"User: {user.get('name')}")
+    
+    print(f"\nUser: {user.get('name')}")
     print(f"Beach: {user.get('beach_name')} (ID: {user.get('beach_id')})")
-    print(f"Swell: {user.get('min_swell')}m – {user.get('max_swell')}m")
-    print(f"Tide: {user.get('min_tide')}m – {user.get('max_tide')}m")
-    print(f"Offshore wind: up to {user.get('offshore_max_wind')} km/h")
-    print(f"Cross-shore wind: up to {user.get('cross_shore_max_wind')} km/h")
-    print(f"Onshore wind: up to {user.get('onshore_max_wind')} km/h")
-    print(f"Hours: {user.get('start_hour')}:00 – {user.get('end_hour')}:00")
-    print(f"Previously alerted dates: {get_alerted_dates(user.get('id'))}")
+    print(f"Swell: {user.get('min_swell')}m - {user.get('max_swell')}m")
+    print(f"Tide: {user.get('min_tide')}m - {user.get('max_tide')}m")
+    print(f"Offshore max wind: {user.get('offshore_max_wind')} km/h")
+    print(f"Cross-shore max wind: {user.get('cross_shore_max_wind')} km/h")
+    print(f"Onshore max wind: {user.get('onshore_max_wind')} km/h")
+    print(f"Hours: {user.get('start_hour')}:00 - {user.get('end_hour')}:00")
     print()
-
-    check_user_forecast(user)
+    
+    alerted = set()
+    check_user(user, alerted)
 
 
 if __name__ == "__main__":
     import sys
-
+    
     if len(sys.argv) > 1:
         if sys.argv[1] == "--test" and len(sys.argv) > 2:
             test_user(sys.argv[2])
-        elif sys.argv[1] == "--once":
-            run_once()
-        elif sys.argv[1] == "--loop":
-            run_loop()
         elif sys.argv[1] == "--test-email":
             print("Sending test email...")
             send_email(
                 os.environ.get("TEST_EMAIL", "test@example.com"),
                 "🏄 SwellCheck Test Email",
-                f"Test email sent at {datetime.utcnow().isoformat()}\n\nYour surf alarm is working!"
+                f"Test email sent at {datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')}\n\nYour surf alarm is working!"
             )
         else:
             print("Usage:")
-            print("  python smart_surf_alarm.py --once             # Run single check now")
-            print("  python smart_surf_alarm.py --loop             # Run daily at 4AM AEST")
-            print("  python smart_surf_alarm.py --test <email>     # Test specific user")
-            print("  python smart_surf_alarm.py --test-email       # Send test email")
+            print("  python smart_surf_alarm.py                  # Run alarm loop")
+            print("  python smart_surf_alarm.py --test <email>   # Test specific user")
+            print("  python smart_surf_alarm.py --test-email     # Send test email")
     else:
-        run_once()
+        run_alarm()

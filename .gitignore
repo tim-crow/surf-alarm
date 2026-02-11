@@ -1,0 +1,18 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Node (webapp)
+webapp/node_modules/
+webapp/.next/
+webapp/.env.local
+
+# Test files
+test_wind.py
