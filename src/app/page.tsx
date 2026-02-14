@@ -180,9 +180,6 @@ export default function LandingPage() {
           <p className="text-white/70 text-lg md:text-xl mb-8 max-w-lg mx-auto">
             Get live updates on Australia&apos;s best surf locations when conditions line up — without constantly checking reports.
           </p>
-          <p className="text-white/50 text-base mb-8 max-w-lg mx-auto">
-            You know those times when the forecast says no, then you drive past the beach without your board and it has turned on with no one out. This app is for you.
-          </p>
 
           <div className="max-w-md mx-auto mb-4">
             <Link href="/signup" className="glass-button inline-block w-full py-4 text-lg text-center">
