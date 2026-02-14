@@ -188,7 +188,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-white/40 text-sm">
-            Free for 30 days • No credit card required • Cancel anytime
+            Free for 30 days • Cancel anytime
           </p>
         </div>
       </section>
