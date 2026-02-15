@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.supabase_user_id;
+        const customerEmail = session.customer_details?.email;
         
         if (userId) {
           await supabaseAdmin
@@ -51,6 +52,32 @@ export async function POST(request: NextRequest) {
               stripe_subscription_id: session.subscription as string,
             })
             .eq('id', userId);
+        }
+
+        // Send welcome email
+        if (customerEmail && process.env.RESEND_API_KEY) {
+          const { data: userData } = await supabaseAdmin
+            .from('users')
+            .select('name, beach_name')
+            .eq('id', userId)
+            .single();
+
+          const userName = userData?.name || 'there';
+          const beachName = userData?.beach_name || 'your beach';
+
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: process.env.EMAIL_FROM || 'alerts@swellcheck.co',
+              to: [customerEmail],
+              subject: '🏄 Welcome to SwellCheck!',
+              text: `Hey ${userName}!\n\nYou're all set up and ready to go.\n\nWe're now monitoring ${beachName} for your ideal conditions. When swell, tide, and wind all line up, you'll get an email straight away.\n\nWhat happens next:\n• We check conditions every 30 minutes\n• You only get alerted when YOUR thresholds are met\n• Your 30-day free trial has started — no charge today\n\nClick here to check and change your settings:\nhttps://www.swellcheck.co/account\n\nSee you in the water!\nSwellCheck`,
+            }),
+          });
         }
         break;
       }

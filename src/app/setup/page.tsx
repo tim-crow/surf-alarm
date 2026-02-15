@@ -84,27 +84,7 @@ export default function SetupPage() {
 
       if (insertError) throw insertError;
 
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: session.user.email,
-          name: session.user.user_metadata?.full_name || '',
-          userId: userData.id,
-        }),
-      });
-
-      const checkoutData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(checkoutData.error || 'Failed to create checkout session');
-      }
-
-      if (checkoutData.url) {
-        window.location.href = checkoutData.url;
-      } else {
-        throw new Error('No checkout URL returned');
-      }
+      router.push('/success');
     } catch (err: any) {
       const msg = err.message || '';
       if (msg.includes('unique') || msg.includes('duplicate') || msg.includes('users_email_key')) {
