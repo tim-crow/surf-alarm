@@ -524,7 +524,9 @@ Wind Source: {wind.get('source', 'forecast').title()}
 ---
 Generated: {datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')} AEST
 
-To update your preferences or cancel, reply to this email.
+Update your settings: https://www.swellcheck.co/account
+
+This is an automated message. Please do not reply to this email.
 """
     
     return subject, body
