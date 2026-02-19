@@ -84,6 +84,17 @@ export default function SetupPage() {
 
       if (insertError) throw insertError;
 
+      // Send welcome email
+      fetch('/api/welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: session.user.email,
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '',
+          beachName: selectedBeach?.name || '',
+        }),
+      });
+
       router.push('/success');
     } catch (err: any) {
       const msg = err.message || '';
