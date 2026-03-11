@@ -290,33 +290,62 @@ export default function SetupPage() {
               <div className="flex justify-between text-white/80 text-sm mb-3">
                 <label className="font-medium">Tide Preference</label>
               </div>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { label: 'Low', min: 0, max: 0.6 },
-                  { label: 'Mid', min: 0.5, max: 1.5 },
-                  { label: 'High', min: 1.2, max: 2.5 },
-                  { label: 'All', min: 0, max: 2.5 },
-                ].map((preset) => {
-                  const isSelected = minTide === preset.min && maxTide === preset.max;
-                  return (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => { setMinTide(preset.min); setMaxTide(preset.max); }}
-                      className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-gradient-to-r from-blue-500 to-teal-500 text-white'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-white/40 text-xs mt-2">
-                {minTide === 0 && maxTide === 2.5 ? 'Any tide' : `${minTide.toFixed(1)}m – ${maxTide.toFixed(1)}m`}
-              </p>
+              {(() => {
+                const tideOptions = [
+                  { key: 'low', label: 'Low', min: 0, max: 0.6 },
+                  { key: 'mid', label: 'Mid', min: 0.5, max: 1.5 },
+                  { key: 'high', label: 'High', min: 1.2, max: 2.5 },
+                ];
+                const isActive = (opt: typeof tideOptions[0]) => minTide <= opt.min && maxTide >= opt.max;
+                const togglePreset = (preset: typeof tideOptions[0]) => {
+                  const active = tideOptions.filter(isActive);
+                  const wasActive = active.some(a => a.key === preset.key);
+                  let next;
+                  if (wasActive) {
+                    next = active.filter(a => a.key !== preset.key);
+                    if (next.length === 0) return;
+                  } else {
+                    next = [...active, preset];
+                  }
+                  setMinTide(Math.min(...next.map(a => a.min)));
+                  setMaxTide(Math.max(...next.map(a => a.max)));
+                };
+                const allActive = tideOptions.every(isActive);
+                return (
+                  <>
+                    <div className="grid grid-cols-4 gap-2">
+                      {tideOptions.map((preset) => (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          onClick={() => togglePreset(preset)}
+                          className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                            isActive(preset)
+                              ? 'bg-gradient-to-r from-blue-500 to-teal-500 text-white'
+                              : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => { setMinTide(0); setMaxTide(2.5); }}
+                        className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                          allActive
+                            ? 'bg-gradient-to-r from-blue-500 to-teal-500 text-white'
+                            : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                        }`}
+                      >
+                        All
+                      </button>
+                    </div>
+                    <p className="text-white/40 text-xs mt-2">
+                      {allActive ? 'Any tide' : `${minTide.toFixed(1)}m – ${maxTide.toFixed(1)}m`}
+                    </p>
+                  </>
+                );
+              })()}
             </div>
 
             <div className="glass-dark p-4 rounded-lg">
