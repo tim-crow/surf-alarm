@@ -287,37 +287,36 @@ export default function SetupPage() {
             </div>
 
             <div className="glass-dark p-4 rounded-lg">
-              <div className="flex justify-between text-white/80 text-sm mb-1">
-                <label className="font-medium">Tide Height</label>
-                <span className="text-teal-400">{minTide.toFixed(1)}m – {maxTide.toFixed(1)}m</span>
+              <div className="flex justify-between text-white/80 text-sm mb-3">
+                <label className="font-medium">Tide Preference</label>
               </div>
-              <p className="text-white/40 text-xs mb-3">Preset: {selectedBeach.tide.label}</p>
-              <div className="space-y-3">
-                <div>
-                  <span className="text-white/50 text-xs">Min</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={minTide}
-                    onChange={(e) => setMinTide(parseFloat(e.target.value))}
-                    className="slider"
-                  />
-                </div>
-                <div>
-                  <span className="text-white/50 text-xs">Max</span>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2.5"
-                    step="0.1"
-                    value={maxTide}
-                    onChange={(e) => setMaxTide(parseFloat(e.target.value))}
-                    className="slider"
-                  />
-                </div>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Low', min: 0, max: 0.6 },
+                  { label: 'Mid', min: 0.5, max: 1.5 },
+                  { label: 'High', min: 1.2, max: 2.5 },
+                  { label: 'All', min: 0, max: 2.5 },
+                ].map((preset) => {
+                  const isSelected = minTide === preset.min && maxTide === preset.max;
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => { setMinTide(preset.min); setMaxTide(preset.max); }}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-blue-500 to-teal-500 text-white'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="text-white/40 text-xs mt-2">
+                {minTide === 0 && maxTide === 2.5 ? 'Any tide' : `${minTide.toFixed(1)}m – ${maxTide.toFixed(1)}m`}
+              </p>
             </div>
 
             <div className="glass-dark p-4 rounded-lg">
