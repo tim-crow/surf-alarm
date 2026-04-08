@@ -37,7 +37,7 @@ const steps = [
   {
     icon: '🔔',
     title: 'Get Alerted',
-    description: 'Receive notifications when conditions are perfect',
+    description: 'Get real-time alerts and 5-day forecast notifications when good windows are ahead',
   },
 ];
 
@@ -58,9 +58,9 @@ const features = [
     description: 'Set your own swell, tide, and wind limits',
   },
   {
-    icon: '📡',
-    title: 'Real-time Data',
-    description: 'Live conditions checked every 30 minutes',
+    icon: '📅',
+    title: '5-Day Forecast',
+    description: 'Get notified days in advance when good surf windows are on the horizon',
   },
 ];
 
@@ -178,7 +178,7 @@ export default function LandingPage() {
             </span>
           </h1>
           <p className="text-white/70 text-lg md:text-xl mb-8 max-w-lg mx-auto">
-            Get live updates on Australia&apos;s best surf locations when conditions line up — without constantly checking reports.
+            Get alerted when conditions line up — and when good surf is on the horizon, up to 5 days in advance.
           </p>
 
           <div className="max-w-md mx-auto mb-4">
@@ -246,51 +246,103 @@ export default function LandingPage() {
 
       {/* Mock Email Alert Popup */}
       <section className="relative z-10 px-4 py-20">
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-12">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
               What You&apos;ll Get
             </span>
           </h2>
-          <div
-            className="glass-dark p-6 md:p-8 transform rotate-1 hover:rotate-0 transition-transform duration-300"
-            style={{ boxShadow: '0 25px 60px rgba(0, 0, 0, 0.4)' }}
-          >
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
-              <div className="w-3 h-3 rounded-full bg-red-400" />
-              <div className="w-3 h-3 rounded-full bg-yellow-400" />
-              <div className="w-3 h-3 rounded-full bg-green-400" />
-              <span className="text-white/40 text-xs ml-2">Email Notification</span>
-            </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Real-time alert */}
+            <div>
+              <p className="text-white/50 text-xs uppercase tracking-wide text-center mb-3">Real-time Alert</p>
+              <div
+                className="glass-dark p-6 transform rotate-1 hover:rotate-0 transition-transform duration-300"
+                style={{ boxShadow: '0 25px 60px rgba(0, 0, 0, 0.4)' }}
+              >
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                  <div className="w-3 h-3 rounded-full bg-green-400" />
+                  <span className="text-white/40 text-xs ml-2">Email Notification</span>
+                </div>
 
-            <p className="text-white/50 text-xs mb-1">Subject:</p>
-            <p className="text-white font-semibold mb-4">
-              🏄 Surf&apos;s On! Burleigh Heads - Good conditions at 06:30
-            </p>
+                <p className="text-white/50 text-xs mb-1">Subject:</p>
+                <p className="text-white font-semibold mb-4">
+                  🏄 Surf&apos;s On! Burleigh Heads - Good conditions at 06:30
+                </p>
 
-            <div className="bg-gradient-to-r from-blue-500/20 to-teal-500/20 p-4 rounded-lg border border-white/10 mb-4">
-              <p className="text-teal-400 font-bold text-sm tracking-wide mb-3">
-                OUT THERE! SURF CONDITIONS ARE MET!
-              </p>
+                <div className="bg-gradient-to-r from-blue-500/20 to-teal-500/20 p-4 rounded-lg border border-white/10 mb-4">
+                  <p className="text-teal-400 font-bold text-sm tracking-wide mb-3">
+                    OUT THERE! SURF CONDITIONS ARE MET!
+                  </p>
+                  <div className="text-white/70 text-sm space-y-1">
+                    <p><span className="text-white/50">Location:</span> Burleigh Heads</p>
+                    <p><span className="text-white/50">Time:</span> Thursday 13 Feb at 06:30</p>
+                  </div>
+                </div>
 
-              <div className="text-white/70 text-sm space-y-1">
-                <p><span className="text-white/50">Location:</span> Burleigh Heads</p>
-                <p><span className="text-white/50">Time:</span> Thursday 13 February 2025 at 06:30</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-white/70">
+                    <span>Swell: 1.8m</span>
+                    <span className="text-green-400">✓</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Tide: 0.45m</span>
+                    <span className="text-green-400">✓</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Wind: 8 km/h SW — Offshore</span>
+                    <span className="text-green-400">✓</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-white/70">
-                <span>Swell Height: 1.8m</span>
-                <span className="text-green-400">✓</span>
-              </div>
-              <div className="flex justify-between text-white/70">
-                <span>Tide Height: 0.45m</span>
-                <span className="text-green-400">✓</span>
-              </div>
-              <div className="flex justify-between text-white/70">
-                <span>Wind: 8 km/h SW - Offshore (ideal)</span>
-                <span className="text-green-400">✓</span>
+            {/* Forecast alert */}
+            <div>
+              <p className="text-white/50 text-xs uppercase tracking-wide text-center mb-3">5-Day Forecast Alert</p>
+              <div
+                className="glass-dark p-6 transform -rotate-1 hover:rotate-0 transition-transform duration-300"
+                style={{ boxShadow: '0 25px 60px rgba(0, 0, 0, 0.4)' }}
+              >
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
+                  <div className="w-3 h-3 rounded-full bg-green-400" />
+                  <span className="text-white/40 text-xs ml-2">Email Notification</span>
+                </div>
+
+                <p className="text-white/50 text-xs mb-1">Subject:</p>
+                <p className="text-white font-semibold mb-4">
+                  🏄 Surf window ahead! Burleigh looks good on Sat 15 Feb
+                </p>
+
+                <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-4 rounded-lg border border-white/10 mb-4">
+                  <p className="text-blue-400 font-bold text-sm tracking-wide mb-3">
+                    📅 GOOD CONDITIONS AHEAD
+                  </p>
+                  <div className="text-white/70 text-sm space-y-1">
+                    <p><span className="text-white/50">Location:</span> Burleigh Heads</p>
+                    <p><span className="text-white/50">Date:</span> Saturday 15 February</p>
+                    <p><span className="text-white/50">Windows:</span> 06:00 – 10:00</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-white/70">
+                    <span>Swell: 1.5m @ 10s (SE)</span>
+                    <span className="text-green-400">✓</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Tide: 0.62m</span>
+                    <span className="text-green-400">✓</span>
+                  </div>
+                  <div className="flex justify-between text-white/70">
+                    <span>Wind: 12 km/h W — Offshore</span>
+                    <span className="text-green-400">✓</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -331,7 +383,7 @@ export default function LandingPage() {
             <p className="text-white/50 text-sm mb-6">No hidden fees. No lock-in.</p>
 
             <div className="mb-6">
-              <span className="text-4xl font-bold text-white">$4.99</span>
+              <span className="text-4xl font-bold text-white">$3.99</span>
               <span className="text-white/50 text-lg">/month</span>
               <p className="text-teal-400 text-sm mt-1">30 days free</p>
             </div>

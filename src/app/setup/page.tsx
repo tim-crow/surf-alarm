@@ -135,7 +135,7 @@ export default function SetupPage() {
           </span>
         </h1>
         <p className="text-white/70 text-lg">
-          Get notified when conditions are perfect
+          Get notified when conditions are perfect — and when they&apos;re coming up
         </p>
       </div>
 
@@ -470,6 +470,9 @@ export default function SetupPage() {
                 <li>💨 Onshore: up to {onshoreMaxWind} km/h</li>
                 <li>⏰ {startHour}:00 AM – {endHour > 12 ? endHour - 12 : endHour}:00 PM</li>
               </ul>
+              <p className="text-white/40 text-xs mt-3">
+                📅 You&apos;ll receive real-time alerts plus 5-day forecast notifications when good conditions are ahead.
+              </p>
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -494,7 +497,7 @@ export default function SetupPage() {
       </div>
 
       <p className="text-white/40 text-sm mt-8 z-10">
-        Free for 30 days • Cancel anytime • $4.99/month after trial
+        Free for 30 days • Cancel anytime • $3.99/month after trial
       </p>
     </main>
   );

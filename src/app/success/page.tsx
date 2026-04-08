@@ -45,7 +45,7 @@ function SuccessContent() {
           </div>
 
           <p className="text-white/50 text-sm">
-            After your trial, you'll be charged $4.99/month to continue receiving alerts.
+            After your trial, you'll be charged $3.99/month to continue receiving alerts.
           </p>
         </div>
 
