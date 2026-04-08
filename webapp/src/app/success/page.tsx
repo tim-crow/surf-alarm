@@ -16,11 +16,6 @@ function SuccessContent() {
 
       {/* Logo & Title */}
       <div className="text-center mb-8 z-10">
-        <img 
-          src="/logo.png" 
-          alt="SwellCheck" 
-          className="h-32 mx-auto mb-1"
-        />
         <h1 className="text-4xl font-bold mb-2">
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
             SwellCheck
@@ -50,7 +45,7 @@ function SuccessContent() {
           </div>
 
           <p className="text-white/50 text-sm">
-            After your trial, you'll be charged $4.99/month to continue receiving alerts.
+            After your trial, you'll be charged $3.99/month to continue receiving alerts.
           </p>
         </div>
 

@@ -1,18 +1,19 @@
-# Environment
+# Environment files
 .env
 .env.local
+.env.*
 
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+venv/
 
-# macOS
+# OS files
 .DS_Store
+Thumbs.db
 
-# Node (webapp)
-webapp/node_modules/
-webapp/.next/
-webapp/.env.local
-
-# Test files
-test_wind.py
+# IDE
+.vscode/
+.idea/
