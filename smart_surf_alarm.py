@@ -22,7 +22,7 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "YOUR_RESEND_API_KEY")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "alerts@swellcheck.co")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 BASE_URL = "https://api.willyweather.com.au/v2"
 
