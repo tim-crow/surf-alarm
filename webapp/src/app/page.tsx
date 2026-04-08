@@ -198,10 +198,10 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 mb-12">
           <h2 className="text-3xl font-bold text-center">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
-              Iconic Australian Breaks
+              Your Local Break, Covered
             </span>
           </h2>
-          <p className="text-white/50 text-center mt-2">We monitor all of these — and more</p>
+          <p className="text-white/50 text-center mt-2">We monitor beaches across every major surf region in Australia</p>
         </div>
         <div className="overflow-x-auto scrollbar-hide pb-4">
           <div className="flex gap-4 px-4 w-max">
