@@ -462,6 +462,11 @@ def evaluate_forecast(forecast: dict, user: dict, beach_id: int) -> list:
         if not (min_swell <= swell_height <= max_swell):
             continue
 
+        # Check swell period (must be 7s or more for quality waves)
+        swell_period = entry.get("period", 0)
+        if swell_period < 7:
+            continue
+
         # Get tide height at this time
         tide_height = get_tide_at_time(tide_points, dt, tz)
         if tide_height is None:
