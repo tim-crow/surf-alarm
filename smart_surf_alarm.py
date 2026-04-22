@@ -246,13 +246,13 @@ def save_alerted_dates(user_id: str, dates: list):
     params = {"id": f"eq.{user_id}"}
 
     # Keep only dates in the future or recent past (last 7 days) to avoid unbounded growth
-    cutoff = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now(tz=ZoneInfo("UTC")) - timedelta(days=7)).strftime("%Y-%m-%d")
     clean_dates = [d for d in dates if d >= cutoff]
 
     try:
         requests.patch(url, headers=headers, params=params, json={
             "alerted_dates": clean_dates,
-            "last_alert_at": datetime.utcnow().isoformat(),
+            "last_alert_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
         })
     except Exception as e:
         print(f"    Warning: Could not save alerted_dates: {e}")
@@ -270,7 +270,7 @@ def get_forecast(location_id: int, days: int = 5) -> dict:
         "forecasts": "swell,tides,wind",
         "forecastGraphs": "tides",
         "days": days,
-        "startDate": datetime.utcnow().strftime("%Y-%m-%d"),
+        "startDate": datetime.now(tz=ZoneInfo("UTC")).strftime("%Y-%m-%d"),
     }
 
     response = requests.get(url, params=params)
@@ -677,7 +677,8 @@ def run_once():
     """Run a single check for all users (called by cron/scheduler)."""
     print("=" * 50)
     print(f"SWELLCHECK — {FORECAST_DAYS}-DAY FORECAST CHECK")
-    print(f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    now_utc = datetime.now(tz=ZoneInfo("UTC"))
+    print(f"Time: {now_utc.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     print("=" * 50)
 
     if not WILLYWEATHER_API_KEY or WILLYWEATHER_API_KEY == "YOUR_API_KEY_HERE":
@@ -765,7 +766,7 @@ if __name__ == "__main__":
             send_email(
                 os.environ.get("TEST_EMAIL", "test@example.com"),
                 "🏄 SwellCheck Test Email",
-                f"Test email sent at {datetime.utcnow().isoformat()}\n\nYour surf alarm is working!"
+                f"Test email sent at {datetime.now(tz=ZoneInfo('UTC')).isoformat()}\n\nYour surf alarm is working!"
             )
         else:
             print("Usage:")
