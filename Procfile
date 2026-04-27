@@ -1,1 +1,1 @@
-worker: python3 smart_surf_alarm.py --loop
+worker: python3 smart_surf_alarm.py --once
